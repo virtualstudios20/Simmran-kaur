@@ -1,0 +1,16 @@
+node_modules/
+out/
+dist/
+.DS_Store
+.env
+*.log
+
+# Raw footage and music are large; keep them out of git by default.
+# (Remove these lines or set up Git LFS if you want them versioned.)
+public/broll/*
+!public/broll/.gitkeep
+public/music/*
+!public/music/.gitkeep
+
+# Whisper.cpp models/binaries for AI captions (large downloads)
+whisper.cpp/
