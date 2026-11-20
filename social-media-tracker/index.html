@@ -1,0 +1,563 @@
+<title>Social Media Tracker</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700&family=Inter:wght@400;500;600&display=swap">
+<style>
+/* Layout: header + tabs; summary strip; team member cards (filter); client rows with reels/posts counters for the current renewal cycle. */
+:root {
+  --bg: #f5f5f8; --surface: #ffffff; --surface-2: #efeff4; --ink: #1a1a26; --muted: #61617a; --line: #e0e0ea;
+  --accent: #4a3bc9; --accent-ink: #ffffff; --accent-soft: #e9e6fb;
+  --reel: #d6402b; --reel-soft: #fde8e4; --post: #1f6fd1; --post-soft: #e2eefc;
+  --red: #b3232d; --red-soft: #fbe6e7; --amber: #925400; --amber-soft: #fcefd6; --green: #1b7542; --green-soft: #e0f3e7;
+  --m0: #4a3bc9; --m1: #c2410c; --m2: #0f766e; --m3: #be185d; --m4: #1d4ed8; --m5: #7c3aed; --m6: #15803d; --m7: #a16207;
+  --f-display: "Sora", "Segoe UI", system-ui, sans-serif;
+  --f-body: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #111118; --surface: #191922; --surface-2: #22222d; --ink: #e8e8f0; --muted: #9a9ab0; --line: #2d2d3a;
+  --accent: #9d92ff; --accent-ink: #15122e; --accent-soft: #27234a;
+  --reel: #ff8a75; --reel-soft: #3d201b; --post: #6fb0ff; --post-soft: #172a42;
+  --red: #ff8086; --red-soft: #3a1c20; --amber: #f2b45a; --amber-soft: #382912; --green: #70d49c; --green-soft: #15301f;
+  color-scheme: dark; } }
+:root[data-theme="dark"] {
+  --bg: #111118; --surface: #191922; --surface-2: #22222d; --ink: #e8e8f0; --muted: #9a9ab0; --line: #2d2d3a;
+  --accent: #9d92ff; --accent-ink: #15122e; --accent-soft: #27234a;
+  --reel: #ff8a75; --reel-soft: #3d201b; --post: #6fb0ff; --post-soft: #172a42;
+  --red: #ff8086; --red-soft: #3a1c20; --amber: #f2b45a; --amber-soft: #382912; --green: #70d49c; --green-soft: #15301f;
+  color-scheme: dark; }
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font-family: var(--f-body); font-size: 15px; line-height: 1.45; }
+.wrap { max-width: 1160px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+header.top { background: var(--surface); border-bottom: 1px solid var(--line); }
+header.top .wrap { display: flex; align-items: center; gap: 16px; padding-block: 12px; flex-wrap: wrap; }
+.brand { font-family: var(--f-display); font-weight: 700; font-size: 18px; margin-right: auto; display: flex; align-items: center; gap: 10px; letter-spacing: -.01em; }
+.brand i { width: 26px; height: 26px; border-radius: 8px; background: var(--accent); display: inline-grid; place-items: center; color: var(--accent-ink); font-style: normal; font-size: 13px; }
+nav.tabs { display: flex; gap: 4px; }
+nav.tabs a { text-decoration: none; color: var(--muted); padding: 7px 12px; border-radius: 8px; font-weight: 500; }
+nav.tabs a[aria-current="page"] { color: var(--ink); background: var(--surface-2); }
+button { font: inherit; cursor: pointer; }
+.btn { border: 1px solid var(--line); background: var(--surface); color: var(--ink); padding: 7px 12px; border-radius: 8px; font-weight: 500; font-size: 14px; white-space: nowrap; }
+.btn:hover { border-color: var(--muted); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.btn.danger { color: var(--red); }
+.btn.sm { padding: 4px 9px; font-size: 13px; }
+.btn:disabled { opacity: .5; cursor: default; }
+.btn:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, .iconbtn:focus-visible, .mcard:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.iconbtn { border: 1px solid var(--line); background: var(--surface); color: var(--ink); width: 30px; height: 30px; border-radius: 8px; font-size: 17px; line-height: 1; display: inline-grid; place-items: center; flex: none; }
+.iconbtn:hover { border-color: var(--accent); color: var(--accent); }
+main { padding-block: 20px 60px; display: grid; gap: 24px; }
+.bar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.bar h1 { font-family: var(--f-display); font-size: 24px; margin: 0 auto 0 0; letter-spacing: -.02em; text-wrap: balance; }
+.cyc { display: inline-flex; align-items: center; gap: 4px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 3px; }
+.cyc span { min-width: 120px; text-align: center; font-weight: 600; font-size: 14px; }
+.cyc .iconbtn { border: none; }
+h2 { font-family: var(--f-display); font-size: 17px; margin: 0 0 10px; letter-spacing: -.01em; display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+h2 small { font-family: var(--f-body); font-weight: 400; font-size: 13px; color: var(--muted); }
+.strip { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; }
+@media (max-width: 900px) { .strip { grid-template-columns: repeat(2, minmax(0, 1fr)); } .strip .tile:first-child { grid-column: 1 / -1; } }
+.tile { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 13px 15px; display: grid; gap: 2px; align-content: start; }
+.tile .lbl { font-size: 11.5px; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); font-weight: 600; }
+.tile .val { font-family: var(--f-display); font-size: 24px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.tile .val small { font-size: 15px; color: var(--muted); font-weight: 600; }
+.tile .sub { font-size: 13px; color: var(--muted); }
+.tile.reel .val { color: var(--reel); }
+.tile.post .val { color: var(--post); }
+.tile.warn { border-color: var(--amber); background: var(--amber-soft); }
+.tile.warn .val { color: var(--amber); }
+.members { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; }
+.mcard { text-align: left; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; display: grid; gap: 8px; color: var(--ink); min-width: 0; }
+.mcard:hover { border-color: var(--muted); }
+.mcard[aria-pressed="true"] { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; background: var(--accent-soft); }
+.mhead { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.mhead b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.av { width: 30px; height: 30px; border-radius: 50%; display: inline-grid; place-items: center; color: #fff; font-weight: 600; font-size: 12px; flex: none; }
+.mstats { display: flex; gap: 12px; font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; flex-wrap: wrap; }
+.mstats .r { color: var(--reel); font-weight: 600; }
+.mstats .p { color: var(--post); font-weight: 600; }
+.filters { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+.filters input, .filters select { font: inherit; color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 7px 10px; min-width: 0; }
+.filters input { flex: 1 1 200px; }
+.group { display: grid; gap: 8px; }
+.ghead { display: flex; align-items: center; gap: 10px; margin-top: 6px; }
+.ghead b { font-family: var(--f-display); font-size: 15px; }
+.ghead span { color: var(--muted); font-size: 13px; }
+.row { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; display: grid; grid-template-columns: minmax(170px, 1.4fr) minmax(150px, 1fr) minmax(170px, 1fr) minmax(170px, 1fr) 120px; gap: 14px; align-items: center; }
+.row.s-behind, .row.s-atrisk { border-left: 4px solid var(--amber); }
+.row.s-missed { border-left: 4px solid var(--red); }
+.row.s-done { border-left: 4px solid var(--green); }
+@media (max-width: 960px) { .row { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } .row .who { grid-column: 1 / -1; } .row .st { grid-column: 1 / -1; justify-self: start; } }
+@media (max-width: 480px) { .row { grid-template-columns: minmax(0, 1fr); } }
+.who { min-width: 0; display: grid; gap: 2px; }
+.cname { font-weight: 600; color: var(--ink); background: none; border: none; padding: 0; text-align: left; overflow-wrap: anywhere; font-size: 15px; }
+.cname:hover { color: var(--accent); text-decoration: underline; }
+.meta { color: var(--muted); font-size: 13px; }
+.when { font-size: 13.5px; display: grid; gap: 2px; font-variant-numeric: tabular-nums; }
+.when b { font-weight: 600; }
+.ctr { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 8px; align-items: center; }
+.ctr .mid { display: grid; gap: 4px; min-width: 0; }
+.ctr .lab { display: flex; justify-content: space-between; font-size: 12.5px; color: var(--muted); font-variant-numeric: tabular-nums; gap: 6px; }
+.ctr .lab b { color: var(--ink); font-size: 14px; }
+.ctr.reel .lab span:first-child { color: var(--reel); font-weight: 600; }
+.ctr.post .lab span:first-child { color: var(--post); font-weight: 600; }
+.prog { height: 6px; background: var(--surface-2); border-radius: 99px; overflow: hidden; }
+.prog > b { display: block; height: 100%; border-radius: 99px; }
+.reel .prog > b { background: var(--reel); }
+.post .prog > b { background: var(--post); }
+.st { justify-self: end; }
+.pill { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 600; padding: 3px 9px; border-radius: 999px; white-space: nowrap; }
+.pill::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.p-done { color: var(--green); background: var(--green-soft); }
+.p-behind, .p-atrisk { color: var(--amber); background: var(--amber-soft); }
+.p-missed { color: var(--red); background: var(--red-soft); }
+.p-ontrack, .p-none, .p-paused { color: var(--muted); background: var(--surface-2); }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+.empty { padding: 28px 20px; text-align: center; color: var(--muted); }
+.empty strong { display: block; color: var(--ink); font-size: 16px; margin-bottom: 4px; }
+.empty .acts { display: flex; gap: 8px; justify-content: center; margin-top: 14px; flex-wrap: wrap; }
+.scroll { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+th { text-align: left; font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); font-weight: 600; padding: 10px 14px; border-bottom: 1px solid var(--line); background: var(--surface-2); white-space: nowrap; }
+td { padding: 10px 14px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+tr:last-child td { border-bottom: none; }
+td.acts { text-align: right; white-space: nowrap; }
+td.acts .btn + .btn { margin-left: 6px; }
+.banner { background: var(--accent-soft); border: 1px solid var(--accent); border-radius: 12px; padding: 12px 16px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+.banner p { margin: 0; flex: 1; min-width: 220px; }
+.team-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); gap: 20px; align-items: start; }
+@media (max-width: 860px) { .team-grid { grid-template-columns: minmax(0, 1fr); } }
+.tlist { display: grid; }
+.titem { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--line); }
+.titem:last-child { border-bottom: none; }
+.titem .nm { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+/* modal */
+.overlay { position: fixed; inset: 0; background: rgba(12,12,24,.5); display: grid; place-items: center; z-index: 50; padding: max(16px, env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px)) max(16px, env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px)); }
+.sheet { background: var(--surface); color: var(--ink); border-radius: 14px; width: min(600px, 100%); max-height: 100%; overflow: auto; border: 1px solid var(--line); }
+.sheet header { padding: 16px 20px 0; display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.sheet header h3 { font-family: var(--f-display); font-size: 18px; margin: 0; overflow-wrap: anywhere; }
+.sheet .body { padding: 14px 20px; display: grid; gap: 12px; }
+.sheet footer { padding: 12px 20px 18px; display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
+.sheet footer .left { margin-right: auto; }
+label.f { display: grid; gap: 4px; font-size: 13px; font-weight: 600; color: var(--muted); }
+.f input, .f select, .f textarea { font: inherit; font-weight: 400; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; width: 100%; min-width: 0; }
+.f textarea { resize: vertical; min-height: 64px; }
+.grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.grid3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+@media (max-width: 480px) { .grid2, .grid3 { grid-template-columns: minmax(0, 1fr); } }
+.hint { font-size: 12.5px; color: var(--muted); font-weight: 400; }
+.swatches { display: flex; gap: 8px; flex-wrap: wrap; }
+.swatches label { cursor: pointer; }
+.swatches input { position: absolute; opacity: 0; pointer-events: none; }
+.swatches span { width: 28px; height: 28px; border-radius: 50%; display: block; border: 3px solid transparent; }
+.swatches input:checked + span { border-color: var(--ink); }
+.swatches input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: 2px; }
+.toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(18px + env(safe-area-inset-bottom, 0px)); background: var(--ink); color: var(--bg); padding: 9px 16px; border-radius: 10px; font-size: 14px; z-index: 60; max-width: calc(100% - 32px); }
+.readonly [data-write] { display: none !important; }
+.notice { font-size: 13px; color: var(--muted); margin: 0; }
+@media (prefers-reduced-motion: no-preference) { .prog > b { transition: width .25s ease; } }
+</style>
+
+<header class="top"><div class="wrap">
+  <div class="brand"><i aria-hidden="true">▶</i>Social Media Tracker</div>
+  <nav class="tabs" aria-label="Sections">
+    <a href="#tracker" data-tab="tracker">Tracker</a>
+    <a href="#team" data-tab="team">Team &amp; clients</a>
+  </nav>
+</div></header>
+<main class="wrap" id="main">
+  <div class="empty"><strong>Loading your team…</strong>Team members, their clients and this cycle's reels and posts will appear here.</div>
+</main>
+<div class="overlay" id="overlay" hidden><div class="sheet" role="dialog" aria-modal="true" id="sheet"></div></div>
+<div class="toast" id="toast" hidden></div>
+
+<script>
+(function () {
+  "use strict";
+  const S = {
+    team: [], clients: [], cycles: {},
+    loaded: false, confirmed: false, stale: false, noDb: false, canWrite: true,
+    offset: 0, member: "all", search: "", sort: "renewal",
+  };
+  try { const m = localStorage.getItem("smt-member"); if (m) S.member = m; } catch (e) {}
+  const pending = {};
+  let db = null;
+  const COLORS = 8;
+
+  // ---------- helpers ----------
+  const $ = (s, r = document) => r.querySelector(s);
+  const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const pad = (n) => String(n).padStart(2, "0");
+  const iso = (d) => d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate());
+  const parse = (s) => { const [y, m, d] = s.split("-").map(Number); return new Date(y, m - 1, d || 1); };
+  const today = () => iso(new Date());
+  const daysBetween = (a, b) => Math.round((parse(b) - parse(a)) / 86400000);
+  const fmt = (s) => parse(s).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+  const fmtY = (s) => parse(s).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+  const uid = (p) => p + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+  const ord = (n) => n + (n % 10 === 1 && n !== 11 ? "st" : n % 10 === 2 && n !== 12 ? "nd" : n % 10 === 3 && n !== 13 ? "rd" : "th");
+  const initials = (n) => String(n || "?").trim().split(/\s+/).slice(0, 2).map((w) => w[0]).join("").toUpperCase();
+  const avatar = (m) => `<span class="av" style="background:var(--m${(m && m.color) || 0})" aria-hidden="true">${esc(m ? initials(m.name) : "?")}</span>`;
+  const memberOf = (c) => S.team.find((m) => m.id === c.memberId) || null;
+
+  // ---------- cycle logic ----------
+  function dayIn(y, m, d) { const last = new Date(y, m + 1, 0).getDate(); return new Date(y, m, Math.min(d, last)); }
+  // A cycle runs from the renewal date to the next renewal date (e.g. 5 Nov → 5 Dec).
+  function cycleFor(c, offset) {
+    const t = parse(today()), d = Number(c.renewalDay) || 1;
+    let s = dayIn(t.getFullYear(), t.getMonth(), d);
+    if (s > t) s = dayIn(t.getFullYear(), t.getMonth() - 1, d);
+    s = dayIn(s.getFullYear(), s.getMonth() + offset, d);
+    const r = dayIn(s.getFullYear(), s.getMonth() + 1, d);
+    return { start: iso(s), renew: iso(r) };
+  }
+  function cycleData(c, offset) {
+    const cy = cycleFor(c, offset), k = c.id + "_" + cy.start;
+    const doc = pending[k] || S.cycles[k] || {};
+    const reels = Number(doc.reels) || 0, posts = Number(doc.posts) || 0;
+    const tr = Number(c.reels) || 0, tp = Number(c.posts) || 0;
+    const tgt = tr + tp, done = Math.min(reels, tr) + Math.min(posts, tp);
+    const t = today(), len = daysBetween(cy.start, cy.renew);
+    const over = t >= cy.renew, elapsed = over ? 1 : Math.max(0, daysBetween(cy.start, t)) / len;
+    const daysLeft = over ? 0 : daysBetween(t, cy.renew);
+    const pct = tgt ? done / tgt : 0;
+    let status;
+    if (c.active === false && offset === 0) status = "paused";
+    else if (!tgt) status = "none";
+    else if (done >= tgt) status = "done";
+    else if (over) status = "missed";
+    else if (daysLeft <= 5) status = "atrisk";
+    else if (pct < elapsed - 0.15) status = "behind";
+    else status = "ontrack";
+    return { ...cy, key: k, reels, posts, tr, tp, tgt, done, pct, daysLeft, status, over, notStarted: !!c.startDate && c.startDate >= cy.renew };
+  }
+  const statusText = (d) => ({ done: "All done", missed: "Missed", atrisk: "Renews in " + d.daysLeft + (d.daysLeft === 1 ? " day" : " days"), behind: "Behind", ontrack: "On track", none: "No targets", paused: "Paused" }[d.status]);
+  const offsetLabel = () => S.offset === 0 ? "Current cycle" : S.offset === -1 ? "Previous cycle" : Math.abs(S.offset) + " cycles ago";
+
+  // ---------- writes ----------
+  function errText(e) {
+    const code = e && e.code;
+    if (code === "invalid_argument") return "You don't have permission to change this tracker. Ask the owner for edit access.";
+    if (code === "quota_exceeded") return "Storage is full. Delete old clients to free space.";
+    if (code === "resource_exhausted") return "Too many changes at once. Wait a moment and try again.";
+    return "Couldn't save. Check your connection and try again.";
+  }
+  async function save(path, data) { try { await db.doc(path).set(data); return true; } catch (e) { toast(errText(e)); return false; } }
+  async function remove(path) { try { await db.doc(path).delete(); return true; } catch (e) { toast(errText(e)); return false; } }
+  const writers = {};
+  function queue(k) {
+    const w = writers[k] || (writers[k] = { busy: false, dirty: false, timer: null });
+    w.dirty = true; clearTimeout(w.timer); w.timer = setTimeout(() => flush(k), 400);
+  }
+  async function flush(k) {
+    const w = writers[k]; if (w.busy || !w.dirty) return;
+    w.busy = true; w.dirty = false;
+    const data = { ...pending[k], updatedAt: new Date().toISOString() };
+    try { await db.doc("cycles/" + k).set(data); } catch (e) { toast(errText(e)); }
+    w.busy = false;
+    if (w.dirty) flush(k); else { delete pending[k]; render(); }
+  }
+  function bump(cid, field, n) {
+    const c = S.clients.find((x) => x.id === cid); if (!c) return;
+    const d = cycleData(c, S.offset);
+    const doc = { clientId: cid, memberId: c.memberId || "", start: d.start, renew: d.renew, reels: d.reels, posts: d.posts };
+    doc[field] = Math.max(0, doc[field] + n);
+    pending[d.key] = doc; queue(d.key); render();
+  }
+
+  // ---------- toast & modal ----------
+  let toastT;
+  function toast(msg) { const t = $("#toast"); t.textContent = msg; t.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => (t.hidden = true), 2800); }
+  function openModal(html, onReady) {
+    $("#sheet").innerHTML = html; $("#overlay").hidden = false;
+    const first = $("#sheet input:not([type=radio]), #sheet select, #sheet textarea"); if (first) first.focus();
+    onReady && onReady();
+  }
+  function closeModal() { $("#overlay").hidden = true; $("#sheet").innerHTML = ""; }
+  $("#overlay").addEventListener("click", (e) => { if (e.target.id === "overlay") closeModal(); });
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !$("#overlay").hidden) closeModal(); });
+  const head = (t) => `<header><h3>${esc(t)}</h3><button class="iconbtn" data-act="close" aria-label="Close">×</button></header>`;
+
+  // ---------- views ----------
+  function exampleBanner() {
+    if (!S.team.some((m) => m.example) && !S.clients.some((c) => c.example)) return "";
+    return `<div class="banner"><p><b>You're looking at sample data.</b> Remove it when you're ready to add your real team and clients.</p><button class="btn" data-act="clear-examples" data-write>Remove sample data</button></div>`;
+  }
+  const staleNote = () => S.stale ? `<p class="notice">Can't reach your saved data right now. What you see may be out of date.</p>` : "";
+  function cycSwitch() {
+    return `<div class="cyc" role="group" aria-label="Cycle"><button class="iconbtn" data-act="cyc" data-n="-1" aria-label="Earlier cycle">‹</button><span>${offsetLabel()}</span><button class="iconbtn" data-act="cyc" data-n="1" aria-label="Later cycle" ${S.offset >= 0 ? "disabled" : ""}>›</button></div>`;
+  }
+
+  function viewTracker() {
+    if (!S.team.length && !S.clients.length) {
+      return `<div class="bar"><h1>Tracker</h1></div><div class="panel"><div class="empty"><strong>Set up your team</strong>Add your team members first, then add each client under the person who handles them, with their renewal date and monthly reels and posts.<div class="acts" data-write><button class="btn primary" data-act="new-member">+ Add team member</button><button class="btn" data-act="sample">Try with sample data</button></div></div></div>`;
+    }
+    const active = S.clients.filter((c) => c.active !== false || S.offset !== 0);
+    const rowsData = active.map((c) => ({ c, d: cycleData(c, S.offset) })).filter((x) => !x.d.notStarted);
+    // summary (all clients, regardless of filter)
+    let tr = 0, dr = 0, tp = 0, dp = 0, done = 0, attention = 0;
+    rowsData.forEach(({ d }) => { tr += d.tr; tp += d.tp; dr += Math.min(d.reels, d.tr); dp += Math.min(d.posts, d.tp); if (d.status === "done") done++; if (["behind", "atrisk", "missed"].includes(d.status)) attention++; });
+    // member cards
+    const mstat = (filterFn) => { let r = 0, rt = 0, p = 0, pt = 0, n = 0, att = 0; rowsData.filter(filterFn).forEach(({ d }) => { n++; r += Math.min(d.reels, d.tr); rt += d.tr; p += Math.min(d.posts, d.tp); pt += d.tp; if (["behind", "atrisk", "missed"].includes(d.status)) att++; }); return { r, rt, p, pt, n, att }; };
+    const mcard = (id, label, av, st) => `<button class="mcard" data-act="filter" data-m="${id}" aria-pressed="${S.member === id}">
+      <div class="mhead">${av}<b>${esc(label)}</b></div>
+      <div class="mstats"><span>${st.n} ${st.n === 1 ? "client" : "clients"}</span><span class="r">${st.r}/${st.rt} reels</span><span class="p">${st.p}/${st.pt} posts</span></div>
+      <div class="meta">${st.att ? `<span style="color:var(--amber);font-weight:600">${st.att} need attention</span>` : st.n ? "Everyone on track" : "No clients yet"}</div></button>`;
+    const unassigned = rowsData.some(({ c }) => !memberOf(c));
+    const cards = mcard("all", "Whole team", `<span class="av" style="background:var(--accent);color:var(--accent-ink)" aria-hidden="true">★</span>`, mstat(() => true))
+      + S.team.map((m) => mcard(m.id, m.name, avatar(m), mstat(({ c }) => c.memberId === m.id))).join("")
+      + (unassigned ? mcard("none", "Unassigned", avatar(null), mstat(({ c }) => !memberOf(c))) : "");
+
+    // filtered list
+    const q = S.search.trim().toLowerCase();
+    let list = rowsData.filter(({ c }) => S.member === "all" || (S.member === "none" ? !memberOf(c) : c.memberId === S.member));
+    if (q) list = list.filter(({ c }) => String(c.name).toLowerCase().includes(q));
+    const rank = { atrisk: 0, missed: 0, behind: 1, ontrack: 2, none: 3, done: 4, paused: 5 };
+    list.sort((a, b) => S.sort === "status" ? (rank[a.d.status] - rank[b.d.status]) || (a.d.pct - b.d.pct)
+      : S.sort === "name" ? String(a.c.name).localeCompare(String(b.c.name))
+      : (a.d.renew < b.d.renew ? -1 : a.d.renew > b.d.renew ? 1 : 0));
+
+    let body;
+    if (!list.length) body = `<div class="panel"><div class="empty"><strong>No clients here</strong>${q ? "No client matches that search." : "Add a client and assign it to this team member."}<div class="acts" data-write><button class="btn primary" data-act="new-client">+ Add client</button></div></div></div>`;
+    else if (S.member === "all") {
+      const groups = [...S.team.map((m) => ({ m, items: list.filter(({ c }) => c.memberId === m.id) })), { m: null, items: list.filter(({ c }) => !memberOf(c)) }].filter((g) => g.items.length);
+      body = groups.map((g) => `<div class="group"><div class="ghead">${avatar(g.m)}<b>${esc(g.m ? g.m.name : "Unassigned")}</b><span>${g.items.length} ${g.items.length === 1 ? "client" : "clients"}</span></div>${g.items.map(rowHtml).join("")}</div>`).join("");
+    } else body = `<div class="group">${list.map(rowHtml).join("")}</div>`;
+
+    return `
+      <div class="bar"><h1>Tracker</h1>${cycSwitch()}<button class="btn primary" data-act="new-client" data-write>+ Add client</button></div>
+      ${staleNote()}${exampleBanner()}
+      <section class="strip" aria-label="Summary">
+        <div class="tile"><span class="lbl">${offsetLabel()}</span><span class="val">${done}<small> / ${rowsData.length}</small></span><span class="sub">clients fully delivered</span></div>
+        <div class="tile reel"><span class="lbl">Reels posted</span><span class="val">${dr}<small> / ${tr}</small></span><span class="sub">${tr ? Math.round((dr / tr) * 100) : 0}% of target</span></div>
+        <div class="tile post"><span class="lbl">Posts published</span><span class="val">${dp}<small> / ${tp}</small></span><span class="sub">${tp ? Math.round((dp / tp) * 100) : 0}% of target</span></div>
+        <div class="tile ${attention ? "warn" : ""}"><span class="lbl">Need attention</span><span class="val">${attention}</span><span class="sub">Behind, renewing soon or missed</span></div>
+        <div class="tile"><span class="lbl">Team</span><span class="val">${S.team.length}</span><span class="sub">${S.clients.filter((c) => c.active !== false).length} active clients</span></div>
+      </section>
+      <section><h2>Team <small>Pick a person to see only their clients</small></h2><div class="members">${cards}</div></section>
+      <section>
+        <div class="filters" style="margin-bottom:10px">
+          <input id="q" type="search" placeholder="Search clients" value="${esc(S.search)}" aria-label="Search clients">
+          <select id="sort" aria-label="Sort"><option value="renewal" ${S.sort === "renewal" ? "selected" : ""}>Sort: renewal date</option><option value="status" ${S.sort === "status" ? "selected" : ""}>Sort: needs attention first</option><option value="name" ${S.sort === "name" ? "selected" : ""}>Sort: name</option></select>
+        </div>
+        ${body}
+      </section>`;
+  }
+
+  function counter(c, d, field) {
+    const n = field === "reels" ? d.reels : d.posts, t = field === "reels" ? d.tr : d.tp;
+    const label = field === "reels" ? "Reels" : "Posts";
+    return `<div class="ctr ${field === "reels" ? "reel" : "post"}">
+      <button class="iconbtn" data-act="bump" data-c="${c.id}" data-f="${field}" data-n="-1" aria-label="One less ${label.toLowerCase()} for ${esc(c.name)}" data-write>−</button>
+      <div class="mid"><div class="lab"><span>${label}</span><span><b>${n}</b> / ${t}</span></div><div class="prog"><b style="width:${t ? Math.min(100, Math.round((n / t) * 100)) : 0}%"></b></div></div>
+      <button class="iconbtn" data-act="bump" data-c="${c.id}" data-f="${field}" data-n="1" aria-label="One more ${label.toLowerCase()} for ${esc(c.name)}" data-write>+</button>
+    </div>`;
+  }
+  function rowHtml({ c, d }) {
+    const m = memberOf(c);
+    return `<div class="row s-${d.status}">
+      <div class="who"><button class="cname" data-act="client" data-c="${c.id}">${esc(c.name)}</button><span class="meta">${S.member === "all" ? "" : esc(m ? m.name : "Unassigned") + " · "}Renews on the ${ord(Number(c.renewalDay) || 1)}</span></div>
+      <div class="when"><b>${fmt(d.start)} → ${fmt(d.renew)}</b><span class="meta">${d.over ? "Cycle ended" : d.daysLeft === 0 ? "Renews today" : d.daysLeft + (d.daysLeft === 1 ? " day" : " days") + " left"}</span></div>
+      ${counter(c, d, "reels")}
+      ${counter(c, d, "posts")}
+      <div class="st"><span class="pill p-${d.status}">${statusText(d)}</span></div>
+    </div>`;
+  }
+
+  function viewTeam() {
+    const memberRows = S.team.map((m) => {
+      const n = S.clients.filter((c) => c.memberId === m.id).length;
+      return `<div class="titem">${avatar(m)}<div class="nm"><b>${esc(m.name)}</b><div class="meta">${esc(m.role || "")}${m.role ? " · " : ""}${n} ${n === 1 ? "client" : "clients"}</div></div><span data-write><button class="btn sm" data-act="edit-member" data-m="${m.id}">Edit</button></span></div>`;
+    }).join("");
+    const clients = [...S.clients].sort((a, b) => String((memberOf(a) || {}).name || "~").localeCompare(String((memberOf(b) || {}).name || "~")) || String(a.name).localeCompare(String(b.name)));
+    const crow = (c) => { const m = memberOf(c); return `<tr>
+      <td><button class="cname" data-act="client" data-c="${c.id}">${esc(c.name)}</button>${c.active === false ? ' <span class="pill p-paused">Paused</span>' : ""}</td>
+      <td><span style="display:inline-flex;align-items:center;gap:8px">${avatar(m)}${esc(m ? m.name : "Unassigned")}</span></td>
+      <td>${ord(Number(c.renewalDay) || 1)}</td><td style="color:var(--reel);font-weight:600">${Number(c.reels) || 0}</td><td style="color:var(--post);font-weight:600">${Number(c.posts) || 0}</td>
+      <td class="acts" data-write><button class="btn sm" data-act="edit-client" data-c="${c.id}">Edit</button></td></tr>`; };
+    return `
+      <div class="bar"><h1>Team &amp; clients</h1></div>
+      ${staleNote()}${exampleBanner()}
+      <div class="team-grid">
+        <section><h2>Team members <small>${S.team.length}</small></h2>
+          <div class="panel">${S.team.length ? `<div class="tlist">${memberRows}</div>` : `<div class="empty">No team members yet.</div>`}</div>
+          <div style="margin-top:10px" data-write><button class="btn primary" data-act="new-member">+ Add team member</button></div>
+        </section>
+        <section><h2>Clients <small>${S.clients.length}</small></h2>
+          <div class="panel">${clients.length ? `<div class="scroll"><table><thead><tr><th>Client</th><th>Handled by</th><th>Renewal</th><th>Reels / mo</th><th>Posts / mo</th><th></th></tr></thead><tbody>${clients.map(crow).join("")}</tbody></table></div>` : `<div class="empty">No clients yet. Add team members first, then add clients under them.</div>`}</div>
+          <div style="margin-top:10px" data-write><button class="btn primary" data-act="new-client">+ Add client</button></div>
+        </section>
+      </div>`;
+  }
+
+  function render() {
+    const main = $("#main");
+    document.body.classList.toggle("readonly", !S.canWrite);
+    const r = (location.hash || "#tracker").slice(1);
+    const tab = r === "team" ? "team" : "tracker";
+    document.querySelectorAll("nav.tabs a").forEach((a) => { if (a.dataset.tab === tab) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current"); });
+    if (S.noDb) { main.innerHTML = `<div class="panel"><div class="empty"><strong>Sign in to use the tracker</strong>Open this page while signed in to claude.ai so your team's work can be saved.</div></div>`; return; }
+    if (!S.loaded) { main.innerHTML = `<div class="empty"><strong>${S.stale ? "Can't reach your saved data yet" : "Loading your team…"}</strong>Team members, their clients and this cycle's reels and posts will appear here.</div>`; return; }
+    if (S.member !== "all" && S.member !== "none" && !S.team.some((m) => m.id === S.member)) S.member = "all";
+    const focusId = document.activeElement && document.activeElement.id;
+    const sel = focusId === "q" ? [document.activeElement.selectionStart, document.activeElement.selectionEnd] : null;
+    main.innerHTML = tab === "team" ? viewTeam() : viewTracker();
+    if (focusId === "q") { const q = $("#q"); if (q) { q.focus(); try { q.setSelectionRange(sel[0], sel[1]); } catch (e) {} } }
+  }
+  window.addEventListener("hashchange", () => { render(); window.scrollTo(0, 0); });
+
+  // ---------- modals ----------
+  function memberForm(m) {
+    const isNew = !m;
+    m = m || { name: "", role: "", color: S.team.length % COLORS };
+    const sw = Array.from({ length: COLORS }, (_, i) => `<label><input type="radio" name="mcolor" value="${i}" ${Number(m.color) === i ? "checked" : ""} aria-label="Colour ${i + 1}"><span style="background:var(--m${i})"></span></label>`).join("");
+    const n = isNew ? 0 : S.clients.filter((c) => c.memberId === m.id).length;
+    openModal(`${head(isNew ? "Add team member" : "Edit team member")}
+      <form id="mform"><div class="body">
+        <label class="f">Name<input id="m-name" required value="${esc(m.name)}"></label>
+        <label class="f">Role<input id="m-role" placeholder="e.g. Social media executive" value="${esc(m.role)}"></label>
+        <div class="f">Colour<div class="swatches">${sw}</div></div>
+        <div id="m-confirm" hidden class="banner" style="border-color:var(--red);background:var(--red-soft)"><p>Remove ${esc(m.name)}? Their ${n} ${n === 1 ? "client moves" : "clients move"} to Unassigned. Nothing else is deleted.</p><button type="button" class="btn danger" id="m-del-yes">Remove</button></div>
+      </div>
+      <footer>${isNew ? "" : `<button type="button" class="btn danger left" id="m-del">Remove member</button>`}<button type="button" class="btn" data-act="close">Cancel</button><button class="btn primary" type="submit">${isNew ? "Add member" : "Save"}</button></footer></form>`, () => {
+      $("#mform").addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const data = { name: $("#m-name").value.trim(), role: $("#m-role").value.trim(), color: Number((document.querySelector("input[name=mcolor]:checked") || {}).value) || 0, example: isNew ? false : !!m.example };
+        if (!data.name) return;
+        if (await save("team/" + (isNew ? uid("m") : m.id), data)) { closeModal(); toast(isNew ? "Team member added" : "Saved"); }
+      });
+      const del = $("#m-del");
+      if (del) {
+        del.addEventListener("click", () => { $("#m-confirm").hidden = false; });
+        $("#m-del-yes").addEventListener("click", async () => {
+          for (const c of S.clients.filter((c) => c.memberId === m.id)) { const d = { ...c }; delete d.id; d.memberId = ""; await save("clients/" + c.id, d); }
+          if (await remove("team/" + m.id)) { closeModal(); toast("Team member removed"); }
+        });
+      }
+    });
+  }
+
+  function clientForm(c) {
+    const isNew = !c;
+    const defMember = S.member !== "all" && S.member !== "none" ? S.member : (S.team[0] || {}).id || "";
+    c = c || { name: "", memberId: defMember, renewalDay: new Date().getDate(), reels: 8, posts: 12, startDate: "", notes: "", active: true };
+    openModal(`${head(isNew ? "Add client" : "Edit client")}
+      <form id="cform"><div class="body">
+        <label class="f">Client name<input id="c-name" required value="${esc(c.name)}"></label>
+        <label class="f">Handled by<select id="c-member"><option value="">Unassigned</option>${S.team.map((m) => `<option value="${m.id}" ${c.memberId === m.id ? "selected" : ""}>${esc(m.name)}</option>`).join("")}</select></label>
+        <div class="grid3">
+          <label class="f">Renewal day<input id="c-day" type="number" min="1" max="31" required value="${esc(c.renewalDay)}"></label>
+          <label class="f">Reels per month<input id="c-reels" type="number" min="0" required value="${esc(c.reels)}"></label>
+          <label class="f">Posts per month<input id="c-posts" type="number" min="0" required value="${esc(c.posts)}"></label>
+        </div>
+        <span class="hint" id="c-hint"></span>
+        <label class="f">Notes<textarea id="c-notes" placeholder="Platforms, posting days, brand guidelines…">${esc(c.notes)}</textarea></label>
+        <div id="c-confirm" hidden class="banner" style="border-color:var(--red);background:var(--red-soft)"><p>Delete ${esc(c.name)} and all its cycle history? This can't be undone. To stop tracking but keep history, use Pause instead.</p><button type="button" class="btn danger" id="c-del-yes">Delete</button></div>
+      </div>
+      <footer>${isNew ? "" : `<button type="button" class="btn danger left" id="c-del">Delete</button><button type="button" class="btn" id="c-pause">${c.active === false ? "Resume" : "Pause"}</button>`}<button type="button" class="btn" data-act="close">Cancel</button><button class="btn primary" type="submit">${isNew ? "Add client" : "Save"}</button></footer></form>`, () => {
+      const hint = () => { const d = Math.min(31, Math.max(1, parseInt($("#c-day").value, 10) || 1)); const cy = cycleFor({ renewalDay: d }, 0); $("#c-hint").textContent = `Current cycle: ${fmtY(cy.start)} → ${fmtY(cy.renew)}. Reels and posts are counted within each cycle.`; };
+      $("#c-day").addEventListener("input", hint); hint();
+      $("#cform").addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const data = {
+          name: $("#c-name").value.trim(), memberId: $("#c-member").value,
+          renewalDay: Math.min(31, Math.max(1, parseInt($("#c-day").value, 10) || 1)),
+          reels: Math.max(0, parseInt($("#c-reels").value, 10) || 0), posts: Math.max(0, parseInt($("#c-posts").value, 10) || 0),
+          notes: $("#c-notes").value.trim(), active: isNew ? true : c.active !== false, example: isNew ? false : !!c.example,
+          startDate: isNew ? cycleFor({ renewalDay: parseInt($("#c-day").value, 10) || 1 }, 0).start : (c.startDate || ""),
+        };
+        if (!data.name) return;
+        if (await save("clients/" + (isNew ? uid("c") : c.id), data)) { closeModal(); toast(isNew ? "Client added" : "Saved"); }
+      });
+      if (!isNew) {
+        $("#c-del").addEventListener("click", () => { $("#c-confirm").hidden = false; });
+        $("#c-del-yes").addEventListener("click", async () => { await deleteClient(c); closeModal(); toast("Client deleted"); });
+        $("#c-pause").addEventListener("click", async () => { const d = { ...c }; delete d.id; d.active = c.active === false; if (await save("clients/" + c.id, d)) { closeModal(); toast(d.active ? "Client resumed" : "Client paused"); } });
+      }
+    });
+  }
+  async function deleteClient(c) {
+    for (const k of Object.keys(S.cycles)) if (S.cycles[k].clientId === c.id) await remove("cycles/" + k);
+    await remove("clients/" + c.id);
+  }
+
+  function clientModal(cid) {
+    const c = S.clients.find((x) => x.id === cid); if (!c) return;
+    const m = memberOf(c), rows = [];
+    for (let i = 0; i > -6; i--) { const d = cycleData(c, i); if (d.notStarted) break; rows.push(d); }
+    openModal(`${head(c.name)}
+      <div class="body">
+        <div class="meta" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">${avatar(m)} ${esc(m ? m.name : "Unassigned")} · Renews on the ${ord(Number(c.renewalDay) || 1)} · <span style="color:var(--reel);font-weight:600">${Number(c.reels) || 0} reels</span> + <span style="color:var(--post);font-weight:600">${Number(c.posts) || 0} posts</span> a month</div>
+        ${c.notes ? `<p style="margin:0;white-space:pre-wrap">${esc(c.notes)}</p>` : ""}
+        <div class="panel"><div class="scroll"><table><thead><tr><th>Cycle</th><th>Reels</th><th>Posts</th><th>Status</th></tr></thead><tbody>
+          ${rows.map((d) => `<tr><td>${fmt(d.start)} → ${fmt(d.renew)}</td><td style="color:var(--reel);font-weight:600">${d.reels}/${d.tr}</td><td style="color:var(--post);font-weight:600">${d.posts}/${d.tp}</td><td><span class="pill p-${d.status}">${statusText(d)}</span></td></tr>`).join("")}
+        </tbody></table></div></div>
+        <span class="hint">To correct an earlier cycle, switch to it with the cycle arrows on the Tracker.</span>
+      </div>
+      <footer><button class="btn" data-act="close">Close</button><button class="btn primary" data-act="edit-client" data-c="${c.id}" data-write>Edit client</button></footer>`);
+  }
+
+  async function loadSample() {
+    const t = new Date().getDate();
+    const day = (k) => ((t + k + 30) % 28) + 1;
+    const team = [{ id: "mexriya", name: "Riya (sample)", role: "Social media executive", color: 3 }, { id: "mexkaran", name: "Karan (sample)", role: "Content creator", color: 2 }];
+    const clients = [
+      { id: "cexa", name: "Sample – Glow Skin Clinic", memberId: "mexriya", renewalDay: 5, reels: 8, posts: 12, r: 6, p: 9 },
+      { id: "cexb", name: "Sample – Urban Bakehouse", memberId: "mexriya", renewalDay: day(3), reels: 6, posts: 10, r: 1, p: 3 },
+      { id: "cexc", name: "Sample – Peak Fitness", memberId: "mexriya", renewalDay: day(-10), reels: 4, posts: 8, r: 4, p: 8 },
+      { id: "cexd", name: "Sample – Bloom Florist", memberId: "mexkaran", renewalDay: day(12), reels: 10, posts: 15, r: 2, p: 4 },
+      { id: "cexe", name: "Sample – Spice Route Café", memberId: "mexkaran", renewalDay: 20, reels: 6, posts: 12, r: 3, p: 7 },
+    ];
+    for (const m of team) { const d = { ...m, example: true }; delete d.id; if (!(await save("team/" + m.id, d))) return; }
+    for (const c of clients) {
+      const d = { name: c.name, memberId: c.memberId, renewalDay: c.renewalDay, reels: c.reels, posts: c.posts, notes: "", active: true, example: true, startDate: "" };
+      await save("clients/" + c.id, d);
+      const cy = cycleFor(d, 0);
+      await save("cycles/" + c.id + "_" + cy.start, { clientId: c.id, memberId: c.memberId, start: cy.start, renew: cy.renew, reels: c.r, posts: c.p });
+    }
+    toast("Sample data added");
+  }
+  async function clearSample() {
+    for (const c of S.clients.filter((c) => c.example)) await deleteClient(c);
+    for (const m of S.team.filter((m) => m.example)) await remove("team/" + m.id);
+    S.member = "all"; toast("Sample data removed");
+  }
+
+  // ---------- events ----------
+  document.addEventListener("click", (e) => {
+    const b = e.target.closest("[data-act]"); if (!b) return;
+    const a = b.dataset.act;
+    switch (a) {
+      case "close": closeModal(); break;
+      case "cyc": S.offset = Math.min(0, S.offset + Number(b.dataset.n)); render(); break;
+      case "filter": S.member = b.dataset.m; try { localStorage.setItem("smt-member", S.member); } catch (err) {} render(); break;
+      case "bump": bump(b.dataset.c, b.dataset.f, Number(b.dataset.n)); break;
+      case "client": clientModal(b.dataset.c); break;
+      case "new-client": clientForm(null); break;
+      case "edit-client": clientForm(S.clients.find((x) => x.id === b.dataset.c)); break;
+      case "new-member": memberForm(null); break;
+      case "edit-member": memberForm(S.team.find((x) => x.id === b.dataset.m)); break;
+      case "sample": b.disabled = true; loadSample(); break;
+      case "clear-examples": b.disabled = true; clearSample(); break;
+    }
+  });
+  document.addEventListener("input", (e) => { if (e.target.id === "q") { S.search = e.target.value; render(); } });
+  document.addEventListener("change", (e) => { if (e.target.id === "sort") { S.sort = e.target.value; render(); } });
+
+  // ---------- boot ----------
+  render();
+  (async () => {
+    const cl = window.claude;
+    db = cl ? await cl.use("db") : null;
+    if (!db) { S.noDb = true; render(); return; }
+    const user = await cl.use("user");
+    if (user && typeof user.can === "function") { try { if ((await user.can("data.write")) === false) S.canWrite = false; } catch (e) {} }
+    const timer = setTimeout(() => { if (!S.confirmed) { S.stale = true; render(); } }, 10000);
+    const got = { team: false, clients: false };
+    const ok = (snap, which) => { if (which) got[which] = true; if (got.team && got.clients) S.loaded = true; if (!snap.metadata.fromCache && !S.confirmed) { S.confirmed = true; S.stale = false; clearTimeout(timer); } };
+    const fail = () => { clearTimeout(timer); S.stale = true; S.loaded = true; render(); };
+    const withId = (d) => { const x = { ...d.data() }; x.id = d.id; return x; };
+    db.collection("team").onSnapshot((s) => { S.team = s.docs.map(withId).sort((a, b) => String(a.name).localeCompare(String(b.name))); ok(s, "team"); render(); }, fail);
+    db.collection("clients").onSnapshot((s) => { S.clients = s.docs.map(withId); ok(s, "clients"); render(); }, fail);
+    db.collection("cycles").onSnapshot((s) => { const m = {}; s.docs.forEach((d) => (m[d.id] = d.data())); S.cycles = m; ok(s); render(); }, fail);
+  })();
+})();
+</script>
