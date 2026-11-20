@@ -195,12 +195,13 @@ label.f { display: grid; gap: 4px; font-size: 13px; font-weight: 600; color: var
   "use strict";
   const S = {
     team: [], clients: [], cycles: {},
-    loaded: false, confirmed: false, stale: false, noDb: false, canCount: true, isAdmin: false, me: "",
+    loaded: false, confirmed: false, stale: false, noDb: false, canCount: true, isAdmin: false, me: "", myId: null, claims: {}, work: {}, names: {},
     offset: 0, member: "all", search: "", sort: "renewal",
   };
   try { const m = localStorage.getItem("smt-member"); if (m) S.member = m; S.me = localStorage.getItem("smt-me") || ""; } catch (e) {}
   const pending = {};
-  let db = null;
+  let db = null, userApi = null;
+  const workSubs = {};
   const COLORS = 8;
 
   // ---------- helpers ----------
@@ -230,9 +231,13 @@ label.f { display: grid; gap: 4px; font-size: 13px; font-weight: 600; color: var
     const r = dayIn(s.getFullYear(), s.getMonth() + 1, d);
     return { start: iso(s), renew: iso(r) };
   }
+  // Counts for a client live in the assigned team member's own space (work/<account>/cycles) once their
+  // account is linked; older counts in "cycles" are kept and used as the starting point.
   function cycleData(c, offset) {
     const cy = cycleFor(c, offset), k = c.id + "_" + cy.start;
-    const doc = pending[k] || S.cycles[k] || {};
+    const m = memberOf(c), acct = m && m.accountId;
+    const path = acct ? "work/" + acct + "/cycles/" + k : "cycles/" + k;
+    const doc = pending[path] || (acct && S.work[acct] && S.work[acct][k]) || S.cycles[k] || {};
     const reels = Number(doc.reels) || 0, posts = Number(doc.posts) || 0;
     const tr = Number(c.reels) || 0, tp = Number(c.posts) || 0;
     const tgt = tr + tp, done = Math.min(reels, tr) + Math.min(posts, tp);
@@ -248,7 +253,7 @@ label.f { display: grid; gap: 4px; font-size: 13px; font-weight: 600; color: var
     else if (daysLeft <= 5) status = "atrisk";
     else if (pct < elapsed - 0.15) status = "behind";
     else status = "ontrack";
-    return { ...cy, key: k, reels, posts, tr, tp, tgt, done, pct, daysLeft, status, over, notStarted: !!c.startDate && c.startDate >= cy.renew };
+    return { ...cy, key: k, path, reels, posts, tr, tp, tgt, done, pct, daysLeft, status, over, notStarted: !!c.startDate && c.startDate >= cy.renew };
   }
   const statusText = (d) => ({ done: "All done", missed: "Missed", atrisk: "Renews in " + d.daysLeft + (d.daysLeft === 1 ? " day" : " days"), behind: "Behind", ontrack: "On track", none: "No targets", paused: "Paused" }[d.status]);
   const offsetLabel = () => S.offset === 0 ? "Current cycle" : S.offset === -1 ? "Previous cycle" : Math.abs(S.offset) + " cycles ago";
@@ -272,20 +277,22 @@ label.f { display: grid; gap: 4px; font-size: 13px; font-weight: 600; color: var
     const w = writers[k]; if (w.busy || !w.dirty) return;
     w.busy = true; w.dirty = false;
     const data = { ...pending[k], updatedAt: new Date().toISOString() };
-    try { await db.doc("cycles/" + k).set(data); } catch (e) {
-      if (e && e.code === "invalid_argument") { S.canCount = false; Object.keys(pending).forEach((x) => delete pending[x]); toast("Your access is view-only. Ask the owner to invite you by email as an Editor to update counts."); w.busy = false; render(); return; }
+    try { await db.doc(k).set(data); } catch (e) {
+      if (e && e.code === "invalid_argument") { delete pending[k]; toast("This change wasn't saved. You can only update clients assigned to you, after the owner approves your account."); w.busy = false; render(); return; }
       toast(errText(e));
     }
     w.busy = false;
     if (w.dirty) flush(k); else { delete pending[k]; render(); }
   }
+  function mayCount(c) { return S.isAdmin || (!!myMember() && c.memberId === myMember().id); }
+  function myMember() { return S.myId ? S.team.find((m) => m.accountId === S.myId) || null : null; }
   function bump(cid, field, n, absolute) {
-    const c = S.clients.find((x) => x.id === cid); if (!c) return;
+    const c = S.clients.find((x) => x.id === cid); if (!c || !mayCount(c)) return;
     const d = cycleData(c, S.offset);
     const doc = { clientId: cid, memberId: c.memberId || "", start: d.start, renew: d.renew, reels: d.reels, posts: d.posts };
     doc[field] = Math.max(0, Math.min(999, absolute ? n : doc[field] + n));
     if (doc[field] === d[field]) { render(); return; }
-    pending[d.key] = doc; queue(d.key); render();
+    pending[d.path] = doc; queue(d.path); render();
   }
 
   // ---------- toast & modal ----------
@@ -302,6 +309,19 @@ label.f { display: grid; gap: 4px; font-size: 13px; font-weight: 600; color: var
   const head = (t) => `<header><h3>${esc(t)}</h3><button class="iconbtn" data-act="close" aria-label="Close">×</button></header>`;
 
   // ---------- views ----------
+  function claimsBanner() {
+    if (!S.isAdmin) return "";
+    const list = Object.entries(S.claims).filter(([acct, c]) => { const m = S.team.find((x) => x.id === c.memberId); return m && m.accountId !== acct; });
+    if (!list.length) return "";
+    const missing = list.map(([a]) => a).filter((a) => !(a in S.names));
+    if (missing.length) loadNames(missing);
+    return list.map(([acct, c]) => { const m = S.team.find((x) => x.id === c.memberId); return `<div class="banner"><p><b>${esc(S.names[acct] || "A team account")}</b> says they are <b>${esc(m.name)}</b>. Approve to let this account update ${esc(m.name)}'s clients only.</p><button class="btn" data-act="reject-claim" data-a="${esc(acct)}">Not them</button><button class="btn primary" data-act="approve-claim" data-a="${esc(acct)}" data-m="${m.id}">Approve</button></div>`; }).join("");
+  }
+  async function loadNames(ids) {
+    ids.forEach((i) => (S.names[i] = S.names[i] || ""));
+    if (!userApi || typeof userApi.profiles !== "function") return;
+    try { const ps = await userApi.profiles(ids); ids.forEach((i) => { if (ps && ps[i] && ps[i].name) S.names[i] = ps[i].name; }); render(); } catch (e) {}
+  }
   function exampleBanner() {
     if (!S.team.some((m) => m.example) && !S.clients.some((c) => c.example)) return "";
     return `<div class="banner"><p><b>You're looking at sample data.</b> Remove it when you're ready to add your real team and clients.</p><button class="btn" data-act="clear-examples" data-admin>Remove sample data</button></div>`;
@@ -349,7 +369,7 @@ label.f { display: grid; gap: 4px; font-size: 13px; font-weight: 600; color: var
 
     return `
       <div class="bar"><h1>Tracker</h1>${cycSwitch()}<button class="btn primary" data-act="new-client" data-admin>+ Add client</button></div>
-      ${staleNote()}${exampleBanner()}
+      ${staleNote()}${claimsBanner()}${exampleBanner()}
       <section class="strip" aria-label="Summary">
         <div class="tile"><span class="lbl">${offsetLabel()}</span><span class="val">${done}<small> / ${rowsData.length}</small></span><span class="sub">clients fully delivered</span></div>
         <div class="tile reel"><span class="lbl">Reels posted</span><span class="val">${dr}<small> / ${tr}</small></span><span class="sub">${tr ? Math.round((dr / tr) * 100) : 0}% of target</span></div>
@@ -390,7 +410,7 @@ label.f { display: grid; gap: 4px; font-size: 13px; font-weight: 600; color: var
   function viewTeam() {
     const memberRows = S.team.map((m) => {
       const n = S.clients.filter((c) => c.memberId === m.id).length;
-      return `<div class="titem">${avatar(m)}<div class="nm"><b>${esc(m.name)}</b><div class="meta">${esc(m.role || "")}${m.role ? " · " : ""}${n} ${n === 1 ? "client" : "clients"}</div></div><span data-admin><button class="btn sm" data-act="edit-member" data-m="${m.id}">Edit</button></span></div>`;
+      return `<div class="titem">${avatar(m)}<div class="nm"><b>${esc(m.name)}</b><div class="meta">${esc(m.role || "")}${m.role ? " · " : ""}${n} ${n === 1 ? "client" : "clients"} · ${m.accountId ? '<span style="color:var(--green);font-weight:600">Account linked</span>' : "Account not linked"}</div></div><span data-admin><button class="btn sm" data-act="edit-member" data-m="${m.id}">Edit</button></span></div>`;
     }).join("");
     const clients = [...S.clients].sort((a, b) => String((memberOf(a) || {}).name || "~").localeCompare(String((memberOf(b) || {}).name || "~")) || String(a.name).localeCompare(String(b.name)));
     const crow = (c) => { const m = memberOf(c); return `<tr>
@@ -400,7 +420,7 @@ label.f { display: grid; gap: 4px; font-size: 13px; font-weight: 600; color: var
       <td class="acts" data-admin><button class="btn sm" data-act="edit-client" data-c="${c.id}">Edit</button></td></tr>`; };
     return `
       <div class="bar"><h1>Team &amp; clients</h1></div>
-      ${staleNote()}${exampleBanner()}
+      ${staleNote()}${claimsBanner()}${exampleBanner()}
       <div class="team-grid">
         <section><h2>Team members <small>${S.team.length}</small></h2>
           <div class="panel">${S.team.length ? `<div class="tlist">${memberRows}</div>` : `<div class="empty">No team members yet.</div>`}</div>
@@ -444,10 +464,17 @@ label.f { display: grid; gap: 4px; font-size: 13px; font-weight: 600; color: var
     </div>`;
   }
   function viewMyWork() {
-    const me = S.team.find((m) => m.id === S.me);
+    let me, waiting = null;
+    if (S.isAdmin) me = S.team.find((m) => m.id === S.me);
+    else {
+      if (!S.myId) return `<div class="panel"><div class="empty"><strong>Sign in to update your work</strong>Open this page while signed in to the claude.ai account the owner shared it with.</div></div>`;
+      me = myMember();
+      const cl = S.claims[S.myId];
+      if (!me && cl && S.team.some((m) => m.id === cl.memberId)) { waiting = S.team.find((m) => m.id === cl.memberId); me = waiting; }
+    }
     if (!me) {
       return `<div class="bar"><h1>Who are you?</h1></div>
-        <p class="notice" style="font-size:14px">Pick your name to see the clients you handle and update the reels and posts you've done.</p>
+        <p class="notice" style="font-size:14px">${S.isAdmin ? "Preview the team view as one of your team members." : "Pick your name. The owner will approve it once, and then you can update the reels and posts for your clients."}</p>
         ${S.team.length ? `<div class="members">${S.team.map((m) => `<button class="mcard" data-act="pick-me" data-m="${m.id}"><div class="mhead">${avatar(m)}<b>${esc(m.name)}</b></div><div class="meta">${esc(m.role || "")}${m.role ? " · " : ""}${S.clients.filter((c) => c.memberId === m.id && c.active !== false).length} clients</div></button>`).join("")}</div>`
           : `<div class="panel"><div class="empty"><strong>No team members yet</strong>The owner needs to add the team first.</div></div>`}`;
     }
@@ -464,9 +491,9 @@ label.f { display: grid; gap: 4px; font-size: 13px; font-weight: 600; color: var
       ${c.notes ? `<div class="meta" style="white-space:pre-wrap">${esc(c.notes)}</div>` : ""}
     </article>`).join("");
     return `
-      <div class="bar"><h1 style="display:flex;align-items:center;gap:10px">${avatar(me)} ${esc(me.name)}'s clients</h1>${cycSwitch()}<button class="btn" data-act="change-me">Not ${esc(me.name)}?</button></div>
+      <div class="bar"><h1 style="display:flex;align-items:center;gap:10px">${avatar(me)} ${esc(me.name)}'s clients</h1>${cycSwitch()}${S.isAdmin || waiting ? `<button class="btn" data-act="change-me">${S.isAdmin ? "Switch person" : "Not " + esc(me.name) + "?"}</button>` : ""}</div>
       ${staleNote()}
-      ${S.canCount ? "" : `<p class="notice">You can see your clients but can't update counts. Ask the owner to invite you by email as an Editor.</p>`}
+      ${waiting ? `<div class="banner"><p><b>Waiting for approval.</b> The owner needs to approve that this account is ${esc(me.name)}. You'll be able to update counts as soon as they do.</p></div>` : ""}
       <section class="strip strip4" aria-label="Your summary">
         <div class="tile reel"><span class="lbl">Reels left</span><span class="val">${rl}</span><span class="sub">across ${mine.length} ${mine.length === 1 ? "client" : "clients"}</span></div>
         <div class="tile post"><span class="lbl">Posts left</span><span class="val">${pl}</span><span class="sub">across ${mine.length} ${mine.length === 1 ? "client" : "clients"}</span></div>
@@ -479,7 +506,7 @@ label.f { display: grid; gap: 4px; font-size: 13px; font-weight: 600; color: var
 
   function render() {
     const main = $("#main");
-    document.body.classList.toggle("readonly", !S.canCount);
+    document.body.classList.toggle("readonly", !(S.isAdmin || myMember()));
     document.body.classList.toggle("notadmin", !S.isAdmin);
     let r = (location.hash || (S.isAdmin ? "#tracker" : "#my-work")).slice(1);
     if (!S.isAdmin && S.loaded) r = "my-work";
@@ -507,6 +534,7 @@ label.f { display: grid; gap: 4px; font-size: 13px; font-weight: 600; color: var
         <label class="f">Name<input id="m-name" required value="${esc(m.name)}"></label>
         <label class="f">Role<input id="m-role" placeholder="e.g. Social media executive" value="${esc(m.role)}"></label>
         <div class="f">Colour<div class="swatches">${sw}</div></div>
+        ${isNew ? "" : m.accountId ? `<div class="f">Linked account<span class="hint" style="font-size:14px;color:var(--ink)">${esc(S.names[m.accountId] || "Linked")} · can update counts for ${esc(m.name)}'s clients</span><label class="hint" style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="m-unlink-flag" style="width:auto"> Unlink this account when I save</label></div>` : `<div class="f">Linked account<span class="hint">Not linked yet. Share the page with ${esc(m.name)} as an Editor. When they open it and pick their name, you'll be asked to approve.</span><input type="checkbox" id="m-unlink-flag" hidden></div>`}
         <div id="m-confirm" hidden class="banner" style="border-color:var(--red);background:var(--red-soft)"><p>Remove ${esc(m.name)}? Their ${n} ${n === 1 ? "client moves" : "clients move"} to Unassigned. Nothing else is deleted.</p><button type="button" class="btn danger" id="m-del-yes">Remove</button></div>
       </div>
       <footer>${isNew ? "" : `<button type="button" class="btn danger left" id="m-del">Remove member</button>`}<button type="button" class="btn" data-act="close">Cancel</button><button class="btn primary" type="submit">${isNew ? "Add member" : "Save"}</button></footer></form>`, () => {
@@ -514,6 +542,7 @@ label.f { display: grid; gap: 4px; font-size: 13px; font-weight: 600; color: var
         e.preventDefault();
         const data = { name: $("#m-name").value.trim(), role: $("#m-role").value.trim(), color: Number((document.querySelector("input[name=mcolor]:checked") || {}).value) || 0, example: isNew ? false : !!m.example };
         if (!data.name) return;
+        if (!isNew && m.accountId && !$("#m-unlink-flag").checked) data.accountId = m.accountId;
         if (await save("team/" + (isNew ? uid("m") : m.id), data)) { closeModal(); toast(isNew ? "Team member added" : "Saved"); }
       });
       const del = $("#m-del");
@@ -566,8 +595,22 @@ label.f { display: grid; gap: 4px; font-size: 13px; font-weight: 600; color: var
       }
     });
   }
+  async function approveClaim(acct, mid) {
+    for (const m of S.team) if (m.accountId === acct && m.id !== mid) { const d = { ...m }; delete d.id; delete d.accountId; await save("team/" + m.id, d); }
+    const m = S.team.find((x) => x.id === mid); if (!m) return;
+    const d = { ...m }; delete d.id; d.accountId = acct;
+    if (await save("team/" + mid, d)) toast(m.name + " can now update their clients");
+  }
+  function syncWorkSubs() {
+    const want = new Set(S.isAdmin ? S.team.map((m) => m.accountId).filter(Boolean) : (S.myId ? [S.myId] : []));
+    for (const a of Object.keys(workSubs)) if (!want.has(a)) { workSubs[a](); delete workSubs[a]; delete S.work[a]; }
+    for (const a of want) if (!workSubs[a]) {
+      try { workSubs[a] = db.collection("work/" + a + "/cycles").onSnapshot((s) => { const m = {}; s.docs.forEach((d) => (m[d.id] = d.data())); S.work[a] = m; render(); }, () => {}); } catch (e) {}
+    }
+  }
   async function deleteClient(c) {
     for (const k of Object.keys(S.cycles)) if (S.cycles[k].clientId === c.id) await remove("cycles/" + k);
+    for (const a of Object.keys(S.work)) for (const k of Object.keys(S.work[a])) if (S.work[a][k].clientId === c.id) await remove("work/" + a + "/cycles/" + k);
     await remove("clients/" + c.id);
   }
 
@@ -622,8 +665,12 @@ label.f { display: grid; gap: 4px; font-size: 13px; font-weight: 600; color: var
       case "cyc": S.offset = Math.min(0, S.offset + Number(b.dataset.n)); render(); break;
       case "filter": S.member = b.dataset.m; try { localStorage.setItem("smt-member", S.member); } catch (err) {} render(); break;
       case "bump": bump(b.dataset.c, b.dataset.f, Number(b.dataset.n)); break;
-      case "pick-me": S.me = b.dataset.m; try { localStorage.setItem("smt-me", S.me); } catch (err) {} S.offset = 0; render(); window.scrollTo(0, 0); break;
-      case "change-me": S.me = ""; try { localStorage.removeItem("smt-me"); } catch (err) {} render(); break;
+      case "pick-me": if (!S.isAdmin) { if (S.myId) save("work/" + S.myId, { memberId: b.dataset.m, at: new Date().toISOString() }).then((ok) => ok && toast("Sent to the owner for approval")); break; }
+        S.me = b.dataset.m; try { localStorage.setItem("smt-me", S.me); } catch (err) {} S.offset = 0; render(); window.scrollTo(0, 0); break;
+      case "approve-claim": approveClaim(b.dataset.a, b.dataset.m); break;
+      case "reject-claim": remove("work/" + b.dataset.a).then((ok) => ok && toast("Request dismissed")); break;
+      case "change-me": if (!S.isAdmin) { if (S.myId) remove("work/" + S.myId); break; }
+        S.me = ""; try { localStorage.removeItem("smt-me"); } catch (err) {} render(); break;
       case "client": clientModal(b.dataset.c); break;
       case "new-client": clientForm(null); break;
       case "edit-client": clientForm(S.clients.find((x) => x.id === b.dataset.c)); break;
@@ -646,13 +693,16 @@ label.f { display: grid; gap: 4px; font-size: 13px; font-weight: 600; color: var
     db = cl ? await cl.use("db") : null;
     if (!db) { S.noDb = true; render(); return; }
     const user = await cl.use("user");
-    if (user) { try { S.isAdmin = !!(await user.isOwner()); } catch (e) {} }
+    userApi = user;
+    if (user) { try { S.isAdmin = !!(await user.isOwner()); } catch (e) {} try { S.myId = await user.id(); } catch (e) {} }
     const timer = setTimeout(() => { if (!S.confirmed) { S.stale = true; render(); } }, 10000);
     const got = { team: false, clients: false };
     const ok = (snap, which) => { if (which) got[which] = true; if (got.team && got.clients) S.loaded = true; if (!snap.metadata.fromCache && !S.confirmed) { S.confirmed = true; S.stale = false; clearTimeout(timer); } };
     const fail = () => { clearTimeout(timer); S.stale = true; S.loaded = true; render(); };
     const withId = (d) => { const x = { ...d.data() }; x.id = d.id; return x; };
-    db.collection("team").onSnapshot((s) => { S.team = s.docs.map(withId).sort((a, b) => String(a.name).localeCompare(String(b.name))); ok(s, "team"); render(); }, fail);
+    db.collection("team").onSnapshot((s) => { S.team = s.docs.map(withId).sort((a, b) => String(a.name).localeCompare(String(b.name))); ok(s, "team"); syncWorkSubs(); const ids = S.team.map((m) => m.accountId).filter((a) => a && !(a in S.names)); if (ids.length && S.isAdmin) loadNames(ids); render(); }, fail);
+    if (S.isAdmin) db.collection("work").onSnapshot((s) => { const m = {}; s.docs.forEach((d) => { const x = d.data(); if (x && x.memberId) m[d.id] = x; }); S.claims = m; render(); }, () => {});
+    else if (S.myId) db.doc("work/" + S.myId).onSnapshot((d) => { S.claims = d.exists && d.data().memberId ? { [S.myId]: d.data() } : {}; render(); }, () => {});
     db.collection("clients").onSnapshot((s) => { S.clients = s.docs.map(withId); ok(s, "clients"); render(); }, fail);
     db.collection("cycles").onSnapshot((s) => { const m = {}; s.docs.forEach((d) => (m[d.id] = d.data())); S.cycles = m; ok(s); render(); }, fail);
   })();
