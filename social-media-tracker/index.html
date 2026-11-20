@@ -273,7 +273,7 @@ label.f { display: grid; gap: 4px; font-size: 13px; font-weight: 600; color: var
     w.busy = true; w.dirty = false;
     const data = { ...pending[k], updatedAt: new Date().toISOString() };
     try { await db.doc("cycles/" + k).set(data); } catch (e) {
-      if (e && e.code === "invalid_argument") { S.canCount = false; Object.keys(pending).forEach((x) => delete pending[x]); toast("Your access is view-only. Ask the owner to give you Contributor access to update counts."); w.busy = false; render(); return; }
+      if (e && e.code === "invalid_argument") { S.canCount = false; Object.keys(pending).forEach((x) => delete pending[x]); toast("Your access is view-only. Ask the owner to invite you by email as an Editor to update counts."); w.busy = false; render(); return; }
       toast(errText(e));
     }
     w.busy = false;
@@ -466,7 +466,7 @@ label.f { display: grid; gap: 4px; font-size: 13px; font-weight: 600; color: var
     return `
       <div class="bar"><h1 style="display:flex;align-items:center;gap:10px">${avatar(me)} ${esc(me.name)}'s clients</h1>${cycSwitch()}<button class="btn" data-act="change-me">Not ${esc(me.name)}?</button></div>
       ${staleNote()}
-      ${S.canCount ? "" : `<p class="notice">You can see your clients but can't update counts. Ask the owner to give you Contributor access.</p>`}
+      ${S.canCount ? "" : `<p class="notice">You can see your clients but can't update counts. Ask the owner to invite you by email as an Editor.</p>`}
       <section class="strip strip4" aria-label="Your summary">
         <div class="tile reel"><span class="lbl">Reels left</span><span class="val">${rl}</span><span class="sub">across ${mine.length} ${mine.length === 1 ? "client" : "clients"}</span></div>
         <div class="tile post"><span class="lbl">Posts left</span><span class="val">${pl}</span><span class="sub">across ${mine.length} ${mine.length === 1 ? "client" : "clients"}</span></div>
@@ -646,7 +646,7 @@ label.f { display: grid; gap: 4px; font-size: 13px; font-weight: 600; color: var
     db = cl ? await cl.use("db") : null;
     if (!db) { S.noDb = true; render(); return; }
     const user = await cl.use("user");
-    if (user) { try { S.isAdmin = !!(await user.canEdit()); } catch (e) {} }
+    if (user) { try { S.isAdmin = !!(await user.isOwner()); } catch (e) {} }
     const timer = setTimeout(() => { if (!S.confirmed) { S.stale = true; render(); } }, 10000);
     const got = { team: false, clients: false };
     const ok = (snap, which) => { if (which) got[which] = true; if (got.team && got.clients) S.loaded = true; if (!snap.metadata.fromCache && !S.confirmed) { S.confirmed = true; S.stale = false; clearTimeout(timer); } };
