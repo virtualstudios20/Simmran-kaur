@@ -151,7 +151,27 @@ label.f { display: grid; gap: 4px; font-size: 13px; font-weight: 600; color: var
 .swatches input:checked + span { border-color: var(--ink); }
 .swatches input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: 2px; }
 .toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(18px + env(safe-area-inset-bottom, 0px)); background: var(--ink); color: var(--bg); padding: 9px 16px; border-radius: 10px; font-size: 14px; z-index: 60; max-width: calc(100% - 32px); }
-.readonly [data-write] { display: none !important; }
+.notadmin [data-admin] { display: none !important; }
+.readonly [data-count] { display: none !important; }
+[data-ro] { display: none; }
+.readonly [data-ro] { display: inline; }
+.strip4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+@media (max-width: 900px) { .strip4 { grid-template-columns: repeat(2, minmax(0, 1fr)); } .strip4 .tile:first-child { grid-column: auto; } }
+.wgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); gap: 12px; }
+@media (max-width: 400px) { .wgrid { grid-template-columns: minmax(0, 1fr); } }
+.wcard { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; display: grid; gap: 14px; align-content: start; min-width: 0; }
+.wcard.s-behind, .wcard.s-atrisk { border-left: 4px solid var(--amber); }
+.wcard.s-missed { border-left: 4px solid var(--red); }
+.wcard.s-done { border-left: 4px solid var(--green); }
+.wtop { display: flex; justify-content: space-between; gap: 10px; align-items: flex-start; }
+.wname { font-size: 16px; overflow-wrap: anywhere; }
+.ctr.big .iconbtn { width: 40px; height: 40px; font-size: 20px; border-radius: 10px; }
+.ctr.big .lab { align-items: center; }
+.ctr.big .prog { position: relative; height: 8px; overflow: visible; }
+.ctr.big .prog > b { overflow: hidden; }
+.ctr.big .prog i { position: absolute; top: -3px; width: 2px; height: 14px; background: var(--ink); border-radius: 1px; transform: translateX(-1px); }
+.pace { font-size: 12.5px; color: var(--muted); }
+.numin { width: 56px; font: inherit; font-weight: 600; font-size: 15px; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 3px 6px; text-align: center; margin-right: 4px; font-variant-numeric: tabular-nums; }
 .notice { font-size: 13px; color: var(--muted); margin: 0; }
 @media (prefers-reduced-motion: no-preference) { .prog > b { transition: width .25s ease; } }
 </style>
@@ -159,8 +179,9 @@ label.f { display: grid; gap: 4px; font-size: 13px; font-weight: 600; color: var
 <header class="top"><div class="wrap">
   <div class="brand"><i aria-hidden="true">▶</i>Social Media Tracker</div>
   <nav class="tabs" aria-label="Sections">
-    <a href="#tracker" data-tab="tracker">Tracker</a>
-    <a href="#team" data-tab="team">Team &amp; clients</a>
+    <a href="#tracker" data-tab="tracker" data-admin>Tracker</a>
+    <a href="#team" data-tab="team" data-admin>Team &amp; clients</a>
+    <a href="#my-work" data-tab="my-work">Team view</a>
   </nav>
 </div></header>
 <main class="wrap" id="main">
@@ -174,10 +195,10 @@ label.f { display: grid; gap: 4px; font-size: 13px; font-weight: 600; color: var
   "use strict";
   const S = {
     team: [], clients: [], cycles: {},
-    loaded: false, confirmed: false, stale: false, noDb: false, canWrite: true,
+    loaded: false, confirmed: false, stale: false, noDb: false, canCount: true, isAdmin: false, me: "",
     offset: 0, member: "all", search: "", sort: "renewal",
   };
-  try { const m = localStorage.getItem("smt-member"); if (m) S.member = m; } catch (e) {}
+  try { const m = localStorage.getItem("smt-member"); if (m) S.member = m; S.me = localStorage.getItem("smt-me") || ""; } catch (e) {}
   const pending = {};
   let db = null;
   const COLORS = 8;
@@ -251,15 +272,19 @@ label.f { display: grid; gap: 4px; font-size: 13px; font-weight: 600; color: var
     const w = writers[k]; if (w.busy || !w.dirty) return;
     w.busy = true; w.dirty = false;
     const data = { ...pending[k], updatedAt: new Date().toISOString() };
-    try { await db.doc("cycles/" + k).set(data); } catch (e) { toast(errText(e)); }
+    try { await db.doc("cycles/" + k).set(data); } catch (e) {
+      if (e && e.code === "invalid_argument") { S.canCount = false; Object.keys(pending).forEach((x) => delete pending[x]); toast("Your access is view-only. Ask the owner to give you Contributor access to update counts."); w.busy = false; render(); return; }
+      toast(errText(e));
+    }
     w.busy = false;
     if (w.dirty) flush(k); else { delete pending[k]; render(); }
   }
-  function bump(cid, field, n) {
+  function bump(cid, field, n, absolute) {
     const c = S.clients.find((x) => x.id === cid); if (!c) return;
     const d = cycleData(c, S.offset);
     const doc = { clientId: cid, memberId: c.memberId || "", start: d.start, renew: d.renew, reels: d.reels, posts: d.posts };
-    doc[field] = Math.max(0, doc[field] + n);
+    doc[field] = Math.max(0, Math.min(999, absolute ? n : doc[field] + n));
+    if (doc[field] === d[field]) { render(); return; }
     pending[d.key] = doc; queue(d.key); render();
   }
 
@@ -279,7 +304,7 @@ label.f { display: grid; gap: 4px; font-size: 13px; font-weight: 600; color: var
   // ---------- views ----------
   function exampleBanner() {
     if (!S.team.some((m) => m.example) && !S.clients.some((c) => c.example)) return "";
-    return `<div class="banner"><p><b>You're looking at sample data.</b> Remove it when you're ready to add your real team and clients.</p><button class="btn" data-act="clear-examples" data-write>Remove sample data</button></div>`;
+    return `<div class="banner"><p><b>You're looking at sample data.</b> Remove it when you're ready to add your real team and clients.</p><button class="btn" data-act="clear-examples" data-admin>Remove sample data</button></div>`;
   }
   const staleNote = () => S.stale ? `<p class="notice">Can't reach your saved data right now. What you see may be out of date.</p>` : "";
   function cycSwitch() {
@@ -288,7 +313,7 @@ label.f { display: grid; gap: 4px; font-size: 13px; font-weight: 600; color: var
 
   function viewTracker() {
     if (!S.team.length && !S.clients.length) {
-      return `<div class="bar"><h1>Tracker</h1></div><div class="panel"><div class="empty"><strong>Set up your team</strong>Add your team members first, then add each client under the person who handles them, with their renewal date and monthly reels and posts.<div class="acts" data-write><button class="btn primary" data-act="new-member">+ Add team member</button><button class="btn" data-act="sample">Try with sample data</button></div></div></div>`;
+      return `<div class="bar"><h1>Tracker</h1></div><div class="panel"><div class="empty"><strong>Set up your team</strong>Add your team members first, then add each client under the person who handles them, with their renewal date and monthly reels and posts.<div class="acts" data-admin><button class="btn primary" data-act="new-member">+ Add team member</button><button class="btn" data-act="sample">Try with sample data</button></div></div></div>`;
     }
     const active = S.clients.filter((c) => c.active !== false || S.offset !== 0);
     const rowsData = active.map((c) => ({ c, d: cycleData(c, S.offset) })).filter((x) => !x.d.notStarted);
@@ -316,14 +341,14 @@ label.f { display: grid; gap: 4px; font-size: 13px; font-weight: 600; color: var
       : (a.d.renew < b.d.renew ? -1 : a.d.renew > b.d.renew ? 1 : 0));
 
     let body;
-    if (!list.length) body = `<div class="panel"><div class="empty"><strong>No clients here</strong>${q ? "No client matches that search." : "Add a client and assign it to this team member."}<div class="acts" data-write><button class="btn primary" data-act="new-client">+ Add client</button></div></div></div>`;
+    if (!list.length) body = `<div class="panel"><div class="empty"><strong>No clients here</strong>${q ? "No client matches that search." : "Add a client and assign it to this team member."}<div class="acts" data-admin><button class="btn primary" data-act="new-client">+ Add client</button></div></div></div>`;
     else if (S.member === "all") {
       const groups = [...S.team.map((m) => ({ m, items: list.filter(({ c }) => c.memberId === m.id) })), { m: null, items: list.filter(({ c }) => !memberOf(c)) }].filter((g) => g.items.length);
       body = groups.map((g) => `<div class="group"><div class="ghead">${avatar(g.m)}<b>${esc(g.m ? g.m.name : "Unassigned")}</b><span>${g.items.length} ${g.items.length === 1 ? "client" : "clients"}</span></div>${g.items.map(rowHtml).join("")}</div>`).join("");
     } else body = `<div class="group">${list.map(rowHtml).join("")}</div>`;
 
     return `
-      <div class="bar"><h1>Tracker</h1>${cycSwitch()}<button class="btn primary" data-act="new-client" data-write>+ Add client</button></div>
+      <div class="bar"><h1>Tracker</h1>${cycSwitch()}<button class="btn primary" data-act="new-client" data-admin>+ Add client</button></div>
       ${staleNote()}${exampleBanner()}
       <section class="strip" aria-label="Summary">
         <div class="tile"><span class="lbl">${offsetLabel()}</span><span class="val">${done}<small> / ${rowsData.length}</small></span><span class="sub">clients fully delivered</span></div>
@@ -346,9 +371,9 @@ label.f { display: grid; gap: 4px; font-size: 13px; font-weight: 600; color: var
     const n = field === "reels" ? d.reels : d.posts, t = field === "reels" ? d.tr : d.tp;
     const label = field === "reels" ? "Reels" : "Posts";
     return `<div class="ctr ${field === "reels" ? "reel" : "post"}">
-      <button class="iconbtn" data-act="bump" data-c="${c.id}" data-f="${field}" data-n="-1" aria-label="One less ${label.toLowerCase()} for ${esc(c.name)}" data-write>−</button>
+      <button class="iconbtn" data-act="bump" data-c="${c.id}" data-f="${field}" data-n="-1" aria-label="One less ${label.toLowerCase()} for ${esc(c.name)}" data-count>−</button>
       <div class="mid"><div class="lab"><span>${label}</span><span><b>${n}</b> / ${t}</span></div><div class="prog"><b style="width:${t ? Math.min(100, Math.round((n / t) * 100)) : 0}%"></b></div></div>
-      <button class="iconbtn" data-act="bump" data-c="${c.id}" data-f="${field}" data-n="1" aria-label="One more ${label.toLowerCase()} for ${esc(c.name)}" data-write>+</button>
+      <button class="iconbtn" data-act="bump" data-c="${c.id}" data-f="${field}" data-n="1" aria-label="One more ${label.toLowerCase()} for ${esc(c.name)}" data-count>+</button>
     </div>`;
   }
   function rowHtml({ c, d }) {
@@ -365,42 +390,109 @@ label.f { display: grid; gap: 4px; font-size: 13px; font-weight: 600; color: var
   function viewTeam() {
     const memberRows = S.team.map((m) => {
       const n = S.clients.filter((c) => c.memberId === m.id).length;
-      return `<div class="titem">${avatar(m)}<div class="nm"><b>${esc(m.name)}</b><div class="meta">${esc(m.role || "")}${m.role ? " · " : ""}${n} ${n === 1 ? "client" : "clients"}</div></div><span data-write><button class="btn sm" data-act="edit-member" data-m="${m.id}">Edit</button></span></div>`;
+      return `<div class="titem">${avatar(m)}<div class="nm"><b>${esc(m.name)}</b><div class="meta">${esc(m.role || "")}${m.role ? " · " : ""}${n} ${n === 1 ? "client" : "clients"}</div></div><span data-admin><button class="btn sm" data-act="edit-member" data-m="${m.id}">Edit</button></span></div>`;
     }).join("");
     const clients = [...S.clients].sort((a, b) => String((memberOf(a) || {}).name || "~").localeCompare(String((memberOf(b) || {}).name || "~")) || String(a.name).localeCompare(String(b.name)));
     const crow = (c) => { const m = memberOf(c); return `<tr>
       <td><button class="cname" data-act="client" data-c="${c.id}">${esc(c.name)}</button>${c.active === false ? ' <span class="pill p-paused">Paused</span>' : ""}</td>
       <td><span style="display:inline-flex;align-items:center;gap:8px">${avatar(m)}${esc(m ? m.name : "Unassigned")}</span></td>
       <td>${ord(Number(c.renewalDay) || 1)}</td><td style="color:var(--reel);font-weight:600">${Number(c.reels) || 0}</td><td style="color:var(--post);font-weight:600">${Number(c.posts) || 0}</td>
-      <td class="acts" data-write><button class="btn sm" data-act="edit-client" data-c="${c.id}">Edit</button></td></tr>`; };
+      <td class="acts" data-admin><button class="btn sm" data-act="edit-client" data-c="${c.id}">Edit</button></td></tr>`; };
     return `
       <div class="bar"><h1>Team &amp; clients</h1></div>
       ${staleNote()}${exampleBanner()}
       <div class="team-grid">
         <section><h2>Team members <small>${S.team.length}</small></h2>
           <div class="panel">${S.team.length ? `<div class="tlist">${memberRows}</div>` : `<div class="empty">No team members yet.</div>`}</div>
-          <div style="margin-top:10px" data-write><button class="btn primary" data-act="new-member">+ Add team member</button></div>
+          <div style="margin-top:10px" data-admin><button class="btn primary" data-act="new-member">+ Add team member</button></div>
         </section>
         <section><h2>Clients <small>${S.clients.length}</small></h2>
           <div class="panel">${clients.length ? `<div class="scroll"><table><thead><tr><th>Client</th><th>Handled by</th><th>Renewal</th><th>Reels / mo</th><th>Posts / mo</th><th></th></tr></thead><tbody>${clients.map(crow).join("")}</tbody></table></div>` : `<div class="empty">No clients yet. Add team members first, then add clients under them.</div>`}</div>
-          <div style="margin-top:10px" data-write><button class="btn primary" data-act="new-client">+ Add client</button></div>
+          <div style="margin-top:10px" data-admin><button class="btn primary" data-act="new-client">+ Add client</button></div>
         </section>
       </div>`;
   }
 
+  // ---------- team view: one team member fills in their own clients ----------
+  function pace(d, field) {
+    const done = field === "reels" ? d.reels : d.posts, tgt = field === "reels" ? d.tr : d.tp;
+    const left = Math.max(0, tgt - done);
+    const t = today(), len = daysBetween(d.start, d.renew);
+    const elapsed = d.over ? 1 : Math.max(0, daysBetween(d.start, t)) / len;
+    const shouldBe = Math.min(tgt, Math.ceil(tgt * elapsed));
+    return { done, tgt, left, shouldBe, gap: Math.max(0, shouldBe - done) };
+  }
+  function paceLine(d, p, label) {
+    if (!p.tgt) return `No ${label} this cycle`;
+    if (!p.left) return `<span style="color:var(--green);font-weight:600">All ${p.tgt} ${label} done</span>`;
+    if (d.over) return `<span style="color:var(--red);font-weight:600">${p.left} ${label} were not done</span>`;
+    const days = d.daysLeft;
+    const rate = days >= 7 ? `about ${Math.ceil(p.left / (days / 7))} a week` : `in the next ${days} ${days === 1 ? "day" : "days"}`;
+    const gap = p.gap ? ` · <span style="color:var(--amber);font-weight:600">${p.gap} behind pace</span>` : "";
+    return `<b>${p.left} left</b> by ${fmt(d.renew)} (${rate})${gap}`;
+  }
+  function bigCounter(c, d, field) {
+    const p = pace(d, field), label = field === "reels" ? "Reels" : "Posts";
+    return `<div class="ctr ${field === "reels" ? "reel" : "post"} big">
+      <button class="iconbtn" data-act="bump" data-c="${c.id}" data-f="${field}" data-n="-1" aria-label="One less ${label.toLowerCase()} for ${esc(c.name)}" data-count>−</button>
+      <div class="mid">
+        <div class="lab"><span>${label} done</span><span><input class="numin" type="number" min="0" max="999" inputmode="numeric" id="n-${c.id}-${field}" data-set="${field}" data-c="${c.id}" value="${p.done}" aria-label="${label} done for ${esc(c.name)}" data-count><span class="ro" data-ro>${p.done}</span> of ${p.tgt}</span></div>
+        <div class="prog"><b style="width:${p.tgt ? Math.min(100, Math.round((p.done / p.tgt) * 100)) : 0}%"></b>${p.tgt && !d.over && p.left ? `<i style="left:${Math.round((p.shouldBe / p.tgt) * 100)}%" title="Where you should be today"></i>` : ""}</div>
+        <div class="pace">${paceLine(d, p, label.toLowerCase())}</div>
+      </div>
+      <button class="iconbtn" data-act="bump" data-c="${c.id}" data-f="${field}" data-n="1" aria-label="One more ${label.toLowerCase()} for ${esc(c.name)}" data-count>+</button>
+    </div>`;
+  }
+  function viewMyWork() {
+    const me = S.team.find((m) => m.id === S.me);
+    if (!me) {
+      return `<div class="bar"><h1>Who are you?</h1></div>
+        <p class="notice" style="font-size:14px">Pick your name to see the clients you handle and update the reels and posts you've done.</p>
+        ${S.team.length ? `<div class="members">${S.team.map((m) => `<button class="mcard" data-act="pick-me" data-m="${m.id}"><div class="mhead">${avatar(m)}<b>${esc(m.name)}</b></div><div class="meta">${esc(m.role || "")}${m.role ? " · " : ""}${S.clients.filter((c) => c.memberId === m.id && c.active !== false).length} clients</div></button>`).join("")}</div>`
+          : `<div class="panel"><div class="empty"><strong>No team members yet</strong>The owner needs to add the team first.</div></div>`}`;
+    }
+    const mine = S.clients.filter((c) => c.memberId === me.id && (c.active !== false || S.offset !== 0))
+      .map((c) => ({ c, d: cycleData(c, S.offset) })).filter((x) => !x.d.notStarted)
+      .sort((a, b) => (a.d.renew < b.d.renew ? -1 : a.d.renew > b.d.renew ? 1 : 0));
+    let rl = 0, pl = 0, behind = 0;
+    mine.forEach(({ d }) => { rl += Math.max(0, d.tr - d.reels); pl += Math.max(0, d.tp - d.posts); if (["behind", "atrisk", "missed"].includes(d.status)) behind++; });
+    const next = mine.find(({ d }) => d.status !== "done" && !d.over);
+    const cards = mine.map(({ c, d }) => `<article class="wcard s-${d.status}">
+      <div class="wtop"><div class="who"><b class="wname">${esc(c.name)}</b><span class="meta">${fmt(d.start)} → ${fmt(d.renew)} · ${d.over ? "cycle ended" : d.daysLeft === 0 ? "renews today" : `finish by ${fmt(d.renew)}, ${d.daysLeft} ${d.daysLeft === 1 ? "day" : "days"} left`}</span></div><span class="pill p-${d.status}">${statusText(d)}</span></div>
+      ${bigCounter(c, d, "reels")}
+      ${bigCounter(c, d, "posts")}
+      ${c.notes ? `<div class="meta" style="white-space:pre-wrap">${esc(c.notes)}</div>` : ""}
+    </article>`).join("");
+    return `
+      <div class="bar"><h1 style="display:flex;align-items:center;gap:10px">${avatar(me)} ${esc(me.name)}'s clients</h1>${cycSwitch()}<button class="btn" data-act="change-me">Not ${esc(me.name)}?</button></div>
+      ${staleNote()}
+      ${S.canCount ? "" : `<p class="notice">You can see your clients but can't update counts. Ask the owner to give you Contributor access.</p>`}
+      <section class="strip strip4" aria-label="Your summary">
+        <div class="tile reel"><span class="lbl">Reels left</span><span class="val">${rl}</span><span class="sub">across ${mine.length} ${mine.length === 1 ? "client" : "clients"}</span></div>
+        <div class="tile post"><span class="lbl">Posts left</span><span class="val">${pl}</span><span class="sub">across ${mine.length} ${mine.length === 1 ? "client" : "clients"}</span></div>
+        <div class="tile ${behind ? "warn" : ""}"><span class="lbl">Need attention</span><span class="val">${behind}</span><span class="sub">Behind, renewing soon or missed</span></div>
+        <div class="tile"><span class="lbl">Next deadline</span><span class="val" style="font-size:20px">${next ? fmt(next.d.renew) : "—"}</span><span class="sub">${next ? esc(next.c.name) : "Nothing pending"}</span></div>
+      </section>
+      <p class="notice">Tap <b>+</b> each time a reel or post goes live, or type the total. The small mark on each bar shows where you should be by today.</p>
+      ${mine.length ? `<div class="wgrid">${cards}</div>` : `<div class="panel"><div class="empty"><strong>No clients assigned to you</strong>Ask the owner to assign your clients to you.</div></div>`}`;
+  }
+
   function render() {
     const main = $("#main");
-    document.body.classList.toggle("readonly", !S.canWrite);
-    const r = (location.hash || "#tracker").slice(1);
-    const tab = r === "team" ? "team" : "tracker";
+    document.body.classList.toggle("readonly", !S.canCount);
+    document.body.classList.toggle("notadmin", !S.isAdmin);
+    let r = (location.hash || (S.isAdmin ? "#tracker" : "#my-work")).slice(1);
+    if (!S.isAdmin && S.loaded) r = "my-work";
+    const tab = r === "team" ? "team" : r === "my-work" ? "my-work" : "tracker";
     document.querySelectorAll("nav.tabs a").forEach((a) => { if (a.dataset.tab === tab) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current"); });
     if (S.noDb) { main.innerHTML = `<div class="panel"><div class="empty"><strong>Sign in to use the tracker</strong>Open this page while signed in to claude.ai so your team's work can be saved.</div></div>`; return; }
     if (!S.loaded) { main.innerHTML = `<div class="empty"><strong>${S.stale ? "Can't reach your saved data yet" : "Loading your team…"}</strong>Team members, their clients and this cycle's reels and posts will appear here.</div>`; return; }
     if (S.member !== "all" && S.member !== "none" && !S.team.some((m) => m.id === S.member)) S.member = "all";
-    const focusId = document.activeElement && document.activeElement.id;
-    const sel = focusId === "q" ? [document.activeElement.selectionStart, document.activeElement.selectionEnd] : null;
-    main.innerHTML = tab === "team" ? viewTeam() : viewTracker();
-    if (focusId === "q") { const q = $("#q"); if (q) { q.focus(); try { q.setSelectionRange(sel[0], sel[1]); } catch (e) {} } }
+    const ae = document.activeElement, focusId = ae && main.contains(ae) && ae.id;
+    const typed = focusId && ae.tagName === "INPUT" ? ae.value : null;
+    const sel = focusId === "q" ? [ae.selectionStart, ae.selectionEnd] : null;
+    main.innerHTML = tab === "team" ? viewTeam() : tab === "my-work" ? viewMyWork() : viewTracker();
+    if (focusId) { const el = document.getElementById(focusId); if (el) { if (typed !== null) el.value = typed; el.focus(); if (sel) { try { el.setSelectionRange(sel[0], sel[1]); } catch (e) {} } } }
   }
   window.addEventListener("hashchange", () => { render(); window.scrollTo(0, 0); });
 
@@ -492,7 +584,7 @@ label.f { display: grid; gap: 4px; font-size: 13px; font-weight: 600; color: var
         </tbody></table></div></div>
         <span class="hint">To correct an earlier cycle, switch to it with the cycle arrows on the Tracker.</span>
       </div>
-      <footer><button class="btn" data-act="close">Close</button><button class="btn primary" data-act="edit-client" data-c="${c.id}" data-write>Edit client</button></footer>`);
+      <footer><button class="btn" data-act="close">Close</button><button class="btn primary" data-act="edit-client" data-c="${c.id}" data-admin>Edit client</button></footer>`);
   }
 
   async function loadSample() {
@@ -530,6 +622,8 @@ label.f { display: grid; gap: 4px; font-size: 13px; font-weight: 600; color: var
       case "cyc": S.offset = Math.min(0, S.offset + Number(b.dataset.n)); render(); break;
       case "filter": S.member = b.dataset.m; try { localStorage.setItem("smt-member", S.member); } catch (err) {} render(); break;
       case "bump": bump(b.dataset.c, b.dataset.f, Number(b.dataset.n)); break;
+      case "pick-me": S.me = b.dataset.m; try { localStorage.setItem("smt-me", S.me); } catch (err) {} S.offset = 0; render(); window.scrollTo(0, 0); break;
+      case "change-me": S.me = ""; try { localStorage.removeItem("smt-me"); } catch (err) {} render(); break;
       case "client": clientModal(b.dataset.c); break;
       case "new-client": clientForm(null); break;
       case "edit-client": clientForm(S.clients.find((x) => x.id === b.dataset.c)); break;
@@ -540,7 +634,10 @@ label.f { display: grid; gap: 4px; font-size: 13px; font-weight: 600; color: var
     }
   });
   document.addEventListener("input", (e) => { if (e.target.id === "q") { S.search = e.target.value; render(); } });
-  document.addEventListener("change", (e) => { if (e.target.id === "sort") { S.sort = e.target.value; render(); } });
+  document.addEventListener("change", (e) => {
+    if (e.target.id === "sort") { S.sort = e.target.value; render(); }
+    if (e.target.dataset && e.target.dataset.set) { const v = parseInt(e.target.value, 10); bump(e.target.dataset.c, e.target.dataset.set, isNaN(v) ? 0 : v, true); }
+  });
 
   // ---------- boot ----------
   render();
@@ -549,7 +646,7 @@ label.f { display: grid; gap: 4px; font-size: 13px; font-weight: 600; color: var
     db = cl ? await cl.use("db") : null;
     if (!db) { S.noDb = true; render(); return; }
     const user = await cl.use("user");
-    if (user && typeof user.can === "function") { try { if ((await user.can("data.write")) === false) S.canWrite = false; } catch (e) {} }
+    if (user) { try { S.isAdmin = !!(await user.canEdit()); } catch (e) {} }
     const timer = setTimeout(() => { if (!S.confirmed) { S.stale = true; render(); } }, 10000);
     const got = { team: false, clients: false };
     const ok = (snap, which) => { if (which) got[which] = true; if (got.team && got.clients) S.loaded = true; if (!snap.metadata.fromCache && !S.confirmed) { S.confirmed = true; S.stale = false; clearTimeout(timer); } };
